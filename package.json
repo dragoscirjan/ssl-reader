@@ -50,6 +50,7 @@
     "@commitlint/config-conventional": "^12.1.4",
     "@jscpd/badge-reporter": "^3.3.23",
     "@release-it/conventional-changelog": "^2.0.1",
+    "@types/node-forge": "^0.10.10",
     "chai": "^4.3.4",
     "cross-env": "^7.0.3",
     "dependency-cruiser": "^10.0.1",
@@ -74,5 +75,9 @@
     "sonarqube-scanner": "^2.8.0",
     "typescript": "^4.2.4"
   },
-  "peerDependencies": {}
+  "peerDependencies": {},
+  "dependencies": {
+    "commander": "^8.3.0",
+    "node-forge": "^0.10.0"
+  }
 }
