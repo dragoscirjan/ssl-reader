@@ -1,23 +1,37 @@
 #! /bin/bash
+set -ex
 
 rm -rf ./test/data
 mkdir -p ./test/data
 
-# root
+# for pass in "thepassword" ""; do
+for pass in "thepassword"; do
+    # for pass in ""; do
 
-openssl req -x509 -sha256 -days 1825 -newkey rsa:2048 -passout pass:test -keyout ./test/data/root.key \
--out ./test/data/root.crt -subj "/C=US/ST=Oregon/L=Portland/O=Company Name/OU=Org/CN=www.example.com"
+    pass_out=(-nodes)
+    pass_in=()
+    suffix=""
+    if [ "$pass" != "" ]; then
+        pass_out=(-passout pass:$pass)
+        pass_in=(-passin pass:$pass)
+        suffix="_$pass"
+    fi
 
-# leaf
+    # root
 
-openssl req -newkey rsa:2048 -passout pass:test -keyout ./test/data/leaf.key \
--out ./test/data/leaf.csr -subj "/C=US/ST=Oregon/L=Portland/O=Company Name/OU=Org/CN=www.example.com"
+    openssl req -x509 -sha256 -days 1825 -newkey rsa:2048 "${pass_out[@]}" -keyout ./test/data/root$suffix.key \
+    -out ./test/data/root$suffix.crt -subj "/C=US/ST=Oregon/L=Portland/O=Company Name/OU=Org/CN=www.example.com"
 
-openssl x509 -signkey ./test/data/leaf.key -passin pass:test -in ./test/data/leaf.csr -req -days 365 -out ./test/data/leaf.crt
+    # leaf
 
-# sign
+    openssl req -newkey rsa:2048 "${pass_out[@]}" -keyout ./test/data/leaf$suffix.key \
+    -out ./test/data/leaf$suffix.csr -subj "/C=US/ST=Oregon/L=Portland/O=Company Name/OU=Org/CN=www.example.com"
 
-cat > ./test/data/leaf.ext <<DATA
+    openssl x509 -signkey ./test/data/leaf$suffix.key "${pass_in[@]}" -in ./test/data/leaf$suffix.csr -req -days 365 -out ./test/data/leaf$suffix.crt
+
+    # sign
+
+    cat > ./test/data/leaf$suffix.ext <<DATA
 authorityKeyIdentifier=keyid,issuer
 basicConstraints=CA:FALSE
 subjectAltName = @alt_names
@@ -25,25 +39,32 @@ subjectAltName = @alt_names
 DNS.1 = ./test/data/leaf
 DATA
 
-openssl x509 -req -CA ./test/data/root.crt -passin pass:test -CAkey ./test/data/root.key -in ./test/data/leaf.csr \
--out ./test/data/leaf.crt -days 365 -CAcreateserial -extfile ./test/data/leaf.ext
+    openssl x509 -req -CA ./test/data/root$suffix.crt "${pass_in[@]}" -CAkey ./test/data/root$suffix.key -in ./test/data/leaf$suffix.csr \
+    -out ./test/data/leaf$suffix.crt -days 365 -CAcreateserial -extfile ./test/data/leaf$suffix.ext
 
-# chain
+    # chain
 
-cat ./test/data/leaf.crt >> ./test/data/chain.crt
-cat ./test/data/root.crt >> ./test/data/chain.crt
+    cat ./test/data/leaf$suffix.crt >> ./test/data/chain$suffix.crt
+    cat ./test/data/root$suffix.crt >> ./test/data/chain$suffix.crt
 
-node ./src/index.js --file ./test/data/leaf.crt --file ./test/data/leaf.key
-node ./src/index.js --file ./test/data/chain.crt --file ./test/data/leaf.key
+    node ./src/index.js --file ./test/data/leaf$suffix.crt --file ./test/data/leaf$suffix.key
+    # node ./src/index.js --file ./test/data/chain$suffix.crt --file ./test/data/leaf$suffix.key
 
-openssl x509 -outform der -in ./test/data/leaf.crt -out ./test/data/leaf.der
+    # # DER
 
-node ./src/index.js --file ./test/data/leaf.der --file ./test/data/leaf.key
+    # openssl x509 -outform der -in ./test/data/leaf$suffix.crt -out ./test/data/leaf$suffix.der
 
-# openssl crl2pkcs7 -nocrl -certfile ./test/data/leaf.cer -out ./test/data/leaf.p7b -certfile ./test/data/root.crt
+    # node ./src/index.js --file ./test/data/leaf$suffix.der --file ./test/data/leaf$suffix.key
 
-# node ./src/index.js --file ./test/data/leaf.p7b --file ./test/data/leaf.key
+    # # # PKCS#7
 
-openssl pkcs12 -passin pass:test -inkey ./test/data/leaf.key -in ./test/data/leaf.crt -certfile ./test/data/root.crt -export -passout pass:test -out ./test/data/leaf.pfx
+    # # openssl crl2pkcs7 -nocrl -certfile ./test/data/leaf.cer -out ./test/data/leaf.p7b -certfile ./test/data/root$suffix.crt
 
-node ./src/index.js --file ./test/data/leaf.pfx
+    # # node ./src/index.js --file ./test/data/leaf.p7b --file ./test/data/leaf$suffix.key
+
+    # # PKCS#12
+
+    # openssl pkcs12 "${pass_in[@]}" -inkey ./test/data/leaf$suffix.key -in ./test/data/leaf$suffix.crt -certfile ./test/data/root$suffix.crt -export "${pass_out[@]}" -out ./test/data/leaf$suffix.pfx
+
+    # node ./src/index.js --file ./test/data/leaf$suffix.pfx
+done

@@ -77,7 +77,9 @@
   },
   "peerDependencies": {},
   "dependencies": {
+    "asn1js": "^2.1.1",
     "commander": "^8.3.0",
-    "node-forge": "^0.10.0"
+    "node-forge": "^0.10.0",
+    "pkijs": "^2.2.1"
   }
 }

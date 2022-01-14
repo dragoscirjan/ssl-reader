@@ -1,8 +1,7 @@
-const fs = require('fs');
-const path = require('path');
-
 const {Command} = require('commander');
 const forge = require('node-forge');
+const fs = require('fs');
+const path = require('path');
 
 const program = new Command();
 
@@ -14,6 +13,8 @@ program
 program.parse(process.argv);
 
 const options = program.opts();
+
+const password = 'thepassword';
 
 const decodeFromDer = (content, doThrow = false) => {
   if (!content || content.length <= 1) {
@@ -28,8 +29,11 @@ const decodeFromDer = (content, doThrow = false) => {
     const fromDer = forge.asn1.fromDer(content);
 
     try {
+      const certificate = forge.pki.certificateFromAsn1(fromDer);
       return {
-        certificate: forge.pki.certificateFromAsn1(fromDer),
+        certificate,
+        certificatePublicKey: certificate.publicKey,
+        certificatePrivateKey: certificate.privateKey,
       };
     } catch (e) {
       if (doThrow) {
@@ -81,15 +85,19 @@ const decodeFromPkcs12 = (content) => {
 
   try {
     const fromDer = forge.asn1.fromDer(content);
-    const pkcs12 = forge.pkcs12.pkcs12FromAsn1(fromDer, 'test');
+    const pkcs12 = forge.pkcs12.pkcs12FromAsn1(fromDer, password);
+
+    // const certificate = pkcs12.safeContents
+    //   .find((co) => co.encrypted)
+    //   .safeBags.find((c) => c.cert.extensions && !c.cert.extensions.find((e) => e.cA)).cert,
+    const certificate = pkcs12.safeContents
+      .find((co) => co.safeBags.find((b) => b.cert))
+      .safeBags.find((c) => c.cert.extensions && !c.cert.extensions.find((e) => e.cA)).cert;
 
     return {
-      // certificate: pkcs12.safeContents
-      //   .find((co) => co.encrypted)
-      //   .safeBags.find((c) => c.cert.extensions && !c.cert.extensions.find((e) => e.cA)).cert,
-      certificate: pkcs12.safeContents
-        .find((co) => co.safeBags.find((b) => b.cert))
-        .safeBags.find((c) => c.cert.extensions && !c.cert.extensions.find((e) => e.cA)).cert,
+      certificate,
+      certificatePublicKey: certificate.publicKey,
+      certificatePrivateKey: certificate.privateKey,
       // privateKey: pkcs12.safeContents.find((c) => !c.encrypted).safeBags[0].key,
       privateKey: pkcs12.safeContents.find((c) => c.safeBags.find((b) => b.key)).safeBags[0].key,
     };
@@ -106,14 +114,23 @@ const decodeFromPem = (content) => {
   }
 
   try {
+    const certificate = forge.pki.certificateFromPem(content);
     return {
-      certificate: forge.pki.certificateFromPem(content),
+      certificate,
+      certificatePublicKey: certificate.publicKey,
+      certificatePrivateKey: certificate.privateKey,
     };
   } catch (e) {}
 
   try {
     return {
-      privateKey: forge.pki.decryptRsaPrivateKey(content, 'test'),
+      privateKey: forge.pki.privateKeyFromPem(content),
+    };
+  } catch (e) {}
+
+  try {
+    return {
+      privateKey: forge.pki.decryptRsaPrivateKey(content, password),
     };
   } catch (e) {}
 
@@ -161,6 +178,7 @@ const objects = options.file.map((file) => {
         ...decodeFromPem(content),
         format: 'PEM',
       };
+      console.log(obj, file);
     } catch (e) {
       console.error(`!! Not PEM file: ${e.message}`);
     }
@@ -178,10 +196,11 @@ const objects = options.file.map((file) => {
 
 objects.forEach((obj) => {
   console.log(`From ${obj.format}:`);
-  if (obj.certificate) {
-    console.log(forge.pki.certificateToPem(obj.certificate));
-  }
-  if (obj.privateKey) {
-    console.log(forge.pki.privateKeyToPem(obj.privateKey));
-  }
+  console.log(obj);
+  // if (obj.certificate) {
+  //   console.log(forge.pki.certificateToPem(obj.certificate));
+  // }
+  // if (obj.privateKey) {
+  //   console.log(forge.pki.privateKeyToPem(obj.privateKey));
+  // }
 });
